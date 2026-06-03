@@ -101,7 +101,7 @@
                     linkContainerEl.classList.remove('d-none');
                 }
 
-                const originalRepos = allRepos.filter(repo => !repo.fork);
+                const originalRepos = allRepos.filter(repo => !repo.fork && repo.name.toLowerCase() !== `${ORG_NAME.toLowerCase()}.github.io`);
 
                 if (originalRepos.length === 0) {
                     statusEl.className = "text-center text-secondary py-5";
