@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eja</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light py-5">
+
+    <div class="container" style="max-width: 1000px;">
+        <header class="border-bottom pb-4 mb-4 text-center">
+            <img id="org-logo" src="" alt="Organization Logo" class="rounded d-none mx-auto mb-3" style="width: 80px; height: 80px; object-fit: cover;">
+            <p id="org-subtitle" class="text-secondary small m-0">Retrieving profile information...</p>
+            <div id="org-link-container" class="mt-2 small d-none">
+                <a id="org-link" href="#" class="text-decoration-none" target="_blank" rel="noopener noreferrer"></a>
+            </div>
+        </header>
+
+        <main>
+            <div id="status" class="text-center text-secondary py-5">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Retrieving repository data...
+            </div>
+            
+            <div id="repos-container" class="row g-3 d-none"></div>
+        </main>
+    </div>
+
+    <script>
+        const ORG_NAME = 'eja'; 
+
+        const statusEl = document.getElementById('status');
+        const containerEl = document.getElementById('repos-container');
+        
+        const logoEl = document.getElementById('org-logo');
+        const subtitleEl = document.getElementById('org-subtitle');
+        const linkContainerEl = document.getElementById('org-link-container');
+        const linkEl = document.getElementById('org-link');
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        async function fetchOrgInfo(org) {
+            const response = await fetch(`https://api.github.com/orgs/${org}`);
+            if (!response.ok) {
+                throw new Error(`Org API status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        async function fetchAllRepositories(org) {
+            let repositories = [];
+            let page = 1;
+            let keepFetching = true;
+
+            while (keepFetching) {
+                const response = await fetch(`https://api.github.com/orgs/${org}/repos?sort=updated&per_page=100&page=${page}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Repos API status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    keepFetching = false;
+                } else {
+                    repositories = repositories.concat(data);
+                    page++;
+                }
+            }
+
+            return repositories;
+        }
+
+        async function init() {
+            try {
+                const [orgData, allRepos] = await Promise.all([
+                    fetchOrgInfo(ORG_NAME),
+                    fetchAllRepositories(ORG_NAME)
+                ]);
+
+                subtitleEl.textContent = orgData.description || "Public repository directory.";
+                
+                if (orgData.avatar_url) {
+                    logoEl.src = orgData.avatar_url;
+                    logoEl.classList.remove('d-none');
+                    logoEl.classList.add('d-block');
+                }
+
+                if (orgData.blog) {
+                    const url = orgData.blog.startsWith('http') ? orgData.blog : `https://${orgData.blog}`;
+                    linkEl.href = url;
+                    linkEl.textContent = orgData.blog;
+                    linkContainerEl.classList.remove('d-none');
+                }
+
+                const originalRepos = allRepos.filter(repo => !repo.fork);
+
+                if (originalRepos.length === 0) {
+                    statusEl.className = "text-center text-secondary py-5";
+                    statusEl.textContent = "No public repositories are currently available.";
+                    return;
+                }
+
+                statusEl.classList.add('d-none');
+                containerEl.classList.remove('d-none');
+
+                originalRepos.forEach(repo => {
+                    const col = document.createElement('div');
+                    col.className = 'col-12 col-md-6';
+
+                    const description = repo.description 
+                        ? repo.description 
+                        : "No description available for this repository.";
+
+                    const languageMarkup = repo.language 
+                        ? `<span class="me-3"><strong>Language:</strong> ${repo.language}</span>` 
+                        : '';
+
+                    col.innerHTML = `
+                        <article class="card shadow-sm border h-100">
+                            <div class="card-body p-4 d-flex flex-column">
+                                <h2 class="h5 card-title mb-2">
+                                    <a href="${repo.html_url}" class="text-decoration-none text-primary" target="_blank" rel="noopener noreferrer">${repo.name}</a>
+                                </h2>
+                                <p class="card-text text-secondary mb-4 small flex-grow-1">${description}</p>
+                                <div class="border-top pt-2 text-muted small d-flex mt-auto">
+                                    ${languageMarkup}
+                                    <span><strong>Last Updated:</strong> ${formatDate(repo.updated_at)}</span>
+                                </div>
+                            </div>
+                        </article>
+                    `;
+                    containerEl.appendChild(col);
+                });
+
+            } catch (error) {
+                console.error("Error retrieving data:", error);
+                statusEl.className = 'text-center text-danger py-5';
+                statusEl.textContent = "An error occurred while attempting to retrieve the information. Please try again later.";
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
